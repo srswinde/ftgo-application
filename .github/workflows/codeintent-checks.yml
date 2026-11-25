@@ -580,3 +580,21 @@ jobs:
           done
           echo "::error::CodeIntent checks timed out."
           exit 1
+
+      - name: Finalize an interrupted finding review
+        if: ${{ failure() && env.PR_SHA != '' }}
+        run: |
+          set -euo pipefail
+          state=$(gh api "repos/$PR_FULL_REPO/commits/$PR_SHA/status" \
+            --jq '.statuses[] | select(.context == "CodeIntent / Finding review") | .state')
+          if [ "$state" != pending ]; then
+            exit 0
+          fi
+          description='CodeIntent analysis failed before finding review completed'
+          if [ -z "$API_KEY" ]; then
+            description='CodeIntent unavailable: DRIFT_GATE_API_KEY is missing'
+          fi
+          gh api --method POST "repos/$PR_FULL_REPO/statuses/$PR_SHA" \
+            -f state=error -f context='CodeIntent / Finding review' \
+            -f description="$description" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null

@@ -1,0 +1,44 @@
+name: FTGO order lookup evidence
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'ftgo-api-gateway/**'
+      - 'ftgo-order-service/**'
+      - 'docker-compose.yml'
+      - '.github/holonic/order_lookup_evidence.py'
+      - '.github/workflows/ftgo-order-lookup-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  order-lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify the Java order lookup at the exact source revisions
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p order-lookup
+          if [ -n "$BASE" ]; then
+            python3 .github/holonic/order_lookup_evidence.py --revision "$BASE" --output order-lookup/base.json
+          fi
+          python3 .github/holonic/order_lookup_evidence.py --revision "$HEAD" --output order-lookup/head.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ftgo-order-lookup-evidence
+          path: order-lookup/
+          if-no-files-found: error
